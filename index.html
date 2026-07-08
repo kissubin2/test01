@@ -1,0 +1,755 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Firebase CRUD + รูปภาพ</title>
+
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- Firebase Compat SDK -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+
+    <style>
+        body {
+            background: #f0f4f8;
+            font-family: 'Inter', sans-serif;
+        }
+        .card {
+            background: white;
+            border-radius: 24px;
+            box-shadow: 0 12px 30px rgba(0,0,0,0.06);
+            padding: 2rem;
+            max-width: 1200px;
+            margin: 2rem auto;
+        }
+        .badge {
+            background: #dbeafe;
+            color: #1d4ed8;
+            padding: 0.25rem 0.75rem;
+            border-radius: 999px;
+            font-size: 0.8rem;
+            font-weight: 500;
+        }
+        .status-dot {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            margin-right: 8px;
+        }
+        .status-dot.connected { background: #22c55e; }
+        .status-dot.disconnected { background: #ef4444; }
+        .status-dot.loading { background: #f59e0b; animation: pulse 1.5s infinite; }
+        @keyframes pulse {
+            0% { opacity: 0.6; transform: scale(0.95); }
+            50% { opacity: 1; transform: scale(1.05); }
+            100% { opacity: 0.6; transform: scale(0.95); }
+        }
+        .input-group {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.75rem;
+            margin-top: 0.5rem;
+        }
+        .input-group input, .input-group textarea {
+            flex: 1 1 180px;
+            padding: 0.6rem 1rem;
+            border: 1px solid #d1d5db;
+            border-radius: 40px;
+            outline: none;
+            transition: 0.2s;
+            font-size: 0.95rem;
+        }
+        .input-group input:focus, .input-group textarea:focus {
+            border-color: #3b82f6;
+            box-shadow: 0 0 0 3px rgba(59,130,246,0.2);
+        }
+        .input-group textarea {
+            flex: 1 1 100%;
+            border-radius: 20px;
+            resize: vertical;
+            min-height: 60px;
+        }
+        .btn {
+            background: #3b82f6;
+            color: white;
+            border: none;
+            padding: 0.6rem 1.4rem;
+            border-radius: 40px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: 0.2s;
+            white-space: nowrap;
+        }
+        .btn:hover { background: #2563eb; }
+        .btn:disabled { opacity: 0.6; cursor: not-allowed; }
+        .btn-outline {
+            background: transparent;
+            border: 1px solid #d1d5db;
+            color: #1f2937;
+        }
+        .btn-outline:hover { background: #f3f4f6; border-color: #9ca3af; }
+        .btn-success {
+            background: #22c55e;
+        }
+        .btn-success:hover { background: #16a34a; }
+        .btn-danger {
+            background: #ef4444;
+        }
+        .btn-danger:hover { background: #dc2626; }
+        .btn-warning {
+            background: #f59e0b;
+        }
+        .btn-warning:hover { background: #d97706; }
+        .table-wrap {
+            overflow-x: auto;
+            margin-top: 1.5rem;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.9rem;
+        }
+        th {
+            background: #f8fafc;
+            text-align: left;
+            padding: 0.75rem 0.5rem;
+            border-bottom: 2px solid #e2e8f0;
+            font-weight: 600;
+            color: #1e293b;
+        }
+        td {
+            padding: 0.75rem 0.5rem;
+            border-bottom: 1px solid #e2e8f0;
+            vertical-align: middle;
+        }
+        tr:hover td {
+            background: #f8fafc;
+        }
+        .empty-state {
+            text-align: center;
+            color: #94a3b8;
+            padding: 2.5rem 0;
+        }
+        .toast {
+            position: fixed;
+            bottom: 24px;
+            right: 24px;
+            background: #1e293b;
+            color: white;
+            padding: 12px 24px;
+            border-radius: 40px;
+            font-size: 0.95rem;
+            box-shadow: 0 8px 20px rgba(0,0,0,0.15);
+            transform: translateY(100px);
+            opacity: 0;
+            transition: all 0.3s ease;
+            z-index: 999;
+            max-width: 90%;
+        }
+        .toast.show {
+            transform: translateY(0);
+            opacity: 1;
+        }
+        .toast.success { background: #059669; }
+        .toast.error { background: #dc2626; }
+        .toast.info { background: #2563eb; }
+        .flex-gap-2 { gap: 0.5rem; }
+        .flex-wrap { flex-wrap: wrap; }
+        .text-sm { font-size: 0.875rem; }
+        .text-xs { font-size: 0.75rem; }
+        .font-semibold { font-weight: 600; }
+        .mt-1 { margin-top: 0.25rem; }
+        .mt-2 { margin-top: 0.5rem; }
+        .mt-3 { margin-top: 0.75rem; }
+        .mb-2 { margin-bottom: 0.5rem; }
+        .mb-4 { margin-bottom: 1rem; }
+        .inline-flex { display: inline-flex; }
+        .items-center { align-items: center; }
+        .gap-1 { gap: 0.25rem; }
+        .gap-2 { gap: 0.5rem; }
+        .gap-3 { gap: 0.75rem; }
+        .hidden { display: none; }
+        .w-full { width: 100%; }
+        .max-w-xs { max-width: 20rem; }
+        .rounded-full { border-radius: 9999px; }
+        .shadow-sm { box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
+        .bg-white { background: white; }
+        .border { border: 1px solid #e2e8f0; }
+        .object-cover { object-fit: cover; }
+        .w-20 { width: 5rem; }
+        .h-20 { height: 5rem; }
+        .rounded-lg { border-radius: 0.5rem; }
+        .border-gray-300 { border-color: #d1d5db; }
+        .p-1 { padding: 0.25rem; }
+        .bg-gray-100 { background: #f3f4f6; }
+        .text-center { text-align: center; }
+        .border-dashed { border-style: dashed; }
+    </style>
+</head>
+<body>
+
+<div class="card">
+    <!-- Header -->
+    <div class="flex items-center justify-between mb-4 flex-wrap gap-2">
+        <h1 class="text-2xl font-bold text-gray-800 flex items-center gap-2">
+            🧾 ระบบจัดการข้อมูล + รูปภาพ
+        </h1>
+        <span class="badge">Firestore + Netlify</span>
+    </div>
+
+    <!-- Status -->
+    <div id="statusContainer" class="flex items-center text-sm text-gray-600 mb-4">
+        <span id="statusDot" class="status-dot loading"></span>
+        <span id="statusText">กำลังเชื่อมต่อ...</span>
+    </div>
+
+    <!-- Search -->
+    <div class="flex flex-wrap items-center gap-2 mb-4">
+        <div class="relative flex-1 min-w-[200px]">
+            <input type="text" id="searchInput" placeholder="🔍 ค้นหาทุกฟิลด์ (ยกเว้นรูปภาพ)..."
+                   class="w-full px-4 py-2 border border-gray-300 rounded-full shadow-sm focus:ring-2 focus:ring-blue-300 focus:border-blue-500 outline-none" />
+        </div>
+        <button id="clearSearchBtn" class="btn btn-outline text-sm px-4 py-2">✕ ล้างค้นหา</button>
+        <span class="text-xs text-gray-400 ml-1" id="resultCount"></span>
+    </div>
+
+    <!-- Form -->
+    <div class="bg-gray-50 rounded-2xl p-4 border border-gray-200">
+        <div class="flex items-center justify-between mb-2">
+            <h2 class="text-lg font-semibold text-gray-700" id="formTitle">➕ เพิ่มข้อมูล</h2>
+            <button id="cancelEditBtn" class="btn btn-outline text-sm px-4 py-1 hidden">ยกเลิก</button>
+        </div>
+        <div class="input-group">
+            <input type="text" id="nameInput" placeholder="ชื่อ" />
+            <input type="text" id="addressInput" placeholder="ที่อยู่" />
+            <input type="text" id="idCardInput" placeholder="หมายเลขบัตรประชาชน" />
+            <input type="text" id="phoneInput" placeholder="เบอร์โทร" />
+            <textarea id="noteInput" placeholder="หมายเหตุ"></textarea>
+            <!-- ช่องอัปโหลดรูปภาพ -->
+            <div class="flex flex-wrap items-center gap-3 w-full mt-1">
+                <label class="flex items-center gap-2 cursor-pointer bg-white px-4 py-2 rounded-full border border-gray-300 hover:bg-gray-50 transition">
+                    <span class="text-sm">🖼️ เลือกรูปภาพ</span>
+                    <input type="file" id="imageInput" accept="image/*" class="hidden" />
+                </label>
+                <div id="imagePreview" class="w-20 h-20 rounded-lg border-2 border-dashed border-gray-300 flex items-center justify-center bg-gray-100 overflow-hidden">
+                    <span class="text-gray-400 text-xs text-center">ไม่มีรูป</span>
+                </div>
+                <button id="clearImageBtn" class="btn btn-outline text-sm px-3 py-1">✕ ลบรูป</button>
+                <span class="text-xs text-gray-400">(ระบบจะปรับขนาดเป็น 100×100 px อัตโนมัติ)</span>
+            </div>
+        </div>
+        <div class="flex flex-wrap gap-2 mt-3">
+            <button id="saveBtn" class="btn">💾 บันทึก</button>
+            <button id="clearFormBtn" class="btn btn-outline">🗑️ เคลียร์ฟอร์ม</button>
+        </div>
+    </div>
+
+    <!-- Table -->
+    <div class="table-wrap">
+        <table>
+            <thead>
+                <tr>
+                    <th class="w-12">#</th>
+                    <th class="w-24">รูป</th>
+                    <th>ชื่อ</th>
+                    <th>ที่อยู่</th>
+                    <th>เลขบัตร</th>
+                    <th>เบอร์โทร</th>
+                    <th>หมายเหตุ</th>
+                    <th class="w-36 text-center">จัดการ</th>
+                </tr>
+            </thead>
+            <tbody id="dataBody">
+                <tr><td colspan="8" class="empty-state">📭 กำลังโหลดข้อมูล...</td></tr>
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Footer -->
+    <div class="flex justify-between items-center mt-4 text-sm text-gray-500">
+        <span id="totalCount">ทั้งหมด 0 รายการ</span>
+        <button id="deleteAllBtn" class="btn btn-danger text-sm px-4 py-1">🗑️ ลบทั้งหมด</button>
+    </div>
+</div>
+
+<!-- Toast -->
+<div id="toast" class="toast"></div>
+
+<script>
+    (function() {
+        // ---------- Firebase Config ----------
+        const firebaseConfig = {
+            apiKey: "AIzaSyA_7I_w4faeuK8pkVaI3BsIgl4xyfKbsEA",
+            authDomain: "poject-test01.firebaseapp.com",
+            projectId: "poject-test01",
+            storageBucket: "poject-test01.firebasestorage.app",
+            messagingSenderId: "991654547816",
+            appId: "1:991654547816:web:8794fffdefca2bd3ba86dd",
+            measurementId: "G-ZPMRSEP09N"
+        };
+
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.firestore();
+        db.settings({ timestampsInSnapshots: true });
+
+        const peopleCollection = db.collection('people');
+
+        // ---------- DOM refs ----------
+        const statusDot = document.getElementById('statusDot');
+        const statusText = document.getElementById('statusText');
+        const searchInput = document.getElementById('searchInput');
+        const clearSearchBtn = document.getElementById('clearSearchBtn');
+        const resultCount = document.getElementById('resultCount');
+        const totalCount = document.getElementById('totalCount');
+        const dataBody = document.getElementById('dataBody');
+
+        const nameInput = document.getElementById('nameInput');
+        const addressInput = document.getElementById('addressInput');
+        const idCardInput = document.getElementById('idCardInput');
+        const phoneInput = document.getElementById('phoneInput');
+        const noteInput = document.getElementById('noteInput');
+        const imageInput = document.getElementById('imageInput');
+        const imagePreview = document.getElementById('imagePreview');
+        const clearImageBtn = document.getElementById('clearImageBtn');
+        const saveBtn = document.getElementById('saveBtn');
+        const clearFormBtn = document.getElementById('clearFormBtn');
+        const cancelEditBtn = document.getElementById('cancelEditBtn');
+        const formTitle = document.getElementById('formTitle');
+        const deleteAllBtn = document.getElementById('deleteAllBtn');
+
+        const toast = document.getElementById('toast');
+        let toastTimeout = null;
+
+        // ---------- State ----------
+        let allData = [];
+        let editingId = null;
+        let unsubscribe = null;
+        let currentImageBase64 = null;  // เก็บ base64 ของรูปที่เลือก (จะใช้ใน save)
+
+        // ---------- Helper: Toast ----------
+        function showToast(message, type = 'success') {
+            toast.textContent = message;
+            toast.className = `toast ${type}`;
+            void toast.offsetWidth;
+            toast.classList.add('show');
+            if (toastTimeout) clearTimeout(toastTimeout);
+            toastTimeout = setTimeout(() => {
+                toast.classList.remove('show');
+            }, 3500);
+        }
+
+        // ---------- Helper: Status ----------
+        function setStatus(type, message) {
+            statusDot.className = `status-dot ${type}`;
+            statusText.textContent = message;
+        }
+
+        // ---------- Escape HTML ----------
+        function escapeHtml(text) {
+            if (!text) return '';
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        // ---------- Resize image to 100x100, 96dpi, 24bit (JPEG) ----------
+        function resizeImageTo100x100(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    const img = new Image();
+                    img.onload = function() {
+                        // สร้าง canvas ขนาด 100x100
+                        const canvas = document.createElement('canvas');
+                        canvas.width = 100;
+                        canvas.height = 100;
+                        const ctx = canvas.getContext('2d');
+
+                        // คำนวณ crop ตรงกลางเพื่อให้ภาพเต็ม 100x100 โดยไม่บิดเบี้ยว (cover)
+                        const aspect = img.width / img.height;
+                        let sx, sy, sw, sh;
+                        if (aspect > 1) { // กว้างกว่า
+                            sw = img.height;
+                            sh = img.height;
+                            sx = (img.width - sw) / 2;
+                            sy = 0;
+                        } else { // สูงกว่า
+                            sw = img.width;
+                            sh = img.width;
+                            sx = 0;
+                            sy = (img.height - sh) / 2;
+                        }
+
+                        ctx.drawImage(img, sx, sy, sw, sh, 0, 0, 100, 100);
+
+                        // ส่งออกเป็น JPEG ที่คุณภาพ 0.9 (เพื่อให้ได้ 24-bit color)
+                        const dataUrl = canvas.toDataURL('image/jpeg', 0.9);
+                        resolve(dataUrl);
+                    };
+                    img.onerror = reject;
+                    img.src = e.target.result;
+                };
+                reader.onerror = reject;
+                reader.readAsDataURL(file);
+            });
+        }
+
+        // ---------- จัดการเมื่อเลือกไฟล์รูป ----------
+        imageInput.addEventListener('change', async function(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            // ตรวจสอบว่าเป็นรูปภาพ
+            if (!file.type.startsWith('image/')) {
+                showToast('กรุณาเลือกไฟล์รูปภาพ', 'error');
+                imageInput.value = '';
+                return;
+            }
+
+            try {
+                // แสดง loading ใน preview
+                imagePreview.innerHTML = '<span class="text-xs text-gray-400">กำลังประมวลผล...</span>';
+
+                const base64 = await resizeImageTo100x100(file);
+                currentImageBase64 = base64;
+                // แสดง preview
+                imagePreview.innerHTML = `<img src="${base64}" class="w-full h-full object-cover rounded-lg" alt="preview" />`;
+                showToast('✅ อัปโหลดรูปภาพสำเร็จ (ปรับขนาด 100x100 แล้ว)', 'success');
+            } catch (err) {
+                console.error('Image processing error:', err);
+                showToast('❌ ประมวลผลรูปไม่สำเร็จ', 'error');
+                imagePreview.innerHTML = '<span class="text-gray-400 text-xs text-center">ไม่มีรูป</span>';
+                currentImageBase64 = null;
+            }
+        });
+
+        // ---------- ลบรูปที่เลือก ----------
+        function clearImage() {
+            imageInput.value = '';
+            currentImageBase64 = null;
+            imagePreview.innerHTML = '<span class="text-gray-400 text-xs text-center">ไม่มีรูป</span>';
+        }
+        clearImageBtn.addEventListener('click', clearImage);
+
+        // ---------- Render Table ----------
+        function renderData(items) {
+            if (!items || items.length === 0) {
+                dataBody.innerHTML = `<tr><td colspan="8" class="empty-state">📭 ไม่มีข้อมูล</td></tr>`;
+                totalCount.textContent = 'ทั้งหมด 0 รายการ';
+                resultCount.textContent = '';
+                return;
+            }
+
+            let html = '';
+            items.forEach((item, index) => {
+                const id = item.id;
+                const name = escapeHtml(item.name || '');
+                const address = escapeHtml(item.address || '');
+                const idCard = escapeHtml(item.idCard || '');
+                const phone = escapeHtml(item.phone || '');
+                const note = escapeHtml(item.note || '');
+                const image = item.image || null; // base64 string หรือ null
+
+                const imgHtml = image
+                    ? `<img src="${image}" class="w-20 h-20 object-cover rounded-lg border border-gray-200" alt="รูป" />`
+                    : `<span class="text-gray-400 text-xs">ไม่มีรูป</span>`;
+
+                html += `
+                    <tr>
+                        <td class="text-center text-gray-400">${index + 1}</td>
+                        <td class="text-center">${imgHtml}</td>
+                        <td>${name}</td>
+                        <td>${address}</td>
+                        <td>${idCard}</td>
+                        <td>${phone}</td>
+                        <td>${note}</td>
+                        <td class="text-center">
+                            <button class="edit-btn text-blue-600 hover:text-blue-800 font-medium text-sm px-2 py-1 rounded-full hover:bg-blue-50" data-id="${id}">✏️ แก้ไข</button>
+                            <button class="delete-btn text-red-500 hover:text-red-700 font-medium text-sm px-2 py-1 rounded-full hover:bg-red-50" data-id="${id}">🗑️</button>
+                        </td>
+                    </tr>
+                `;
+            });
+            dataBody.innerHTML = html;
+
+            totalCount.textContent = `ทั้งหมด ${items.length} รายการ`;
+            resultCount.textContent = `(พบ ${items.length} รายการ)`;
+
+            // Event listeners
+            document.querySelectorAll('.edit-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const id = btn.getAttribute('data-id');
+                    startEdit(id);
+                });
+            });
+            document.querySelectorAll('.delete-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const id = btn.getAttribute('data-id');
+                    deleteItem(id);
+                });
+            });
+        }
+
+        // ---------- Filter by search (ไม่ค้นหารูป) ----------
+        function filterData(searchTerm) {
+            if (!searchTerm.trim()) return allData;
+            const term = searchTerm.trim().toLowerCase();
+            return allData.filter(item => {
+                const fields = [item.name, item.address, item.idCard, item.phone, item.note];
+                return fields.some(field => field && field.toLowerCase().includes(term));
+            });
+        }
+
+        // ---------- Refresh UI ----------
+        function refreshUI() {
+            const term = searchInput.value;
+            const filtered = filterData(term);
+            renderData(filtered);
+        }
+
+        // ---------- Set up Realtime Listener ----------
+        function setupListener() {
+            if (unsubscribe) {
+                unsubscribe();
+                unsubscribe = null;
+            }
+
+            try {
+                unsubscribe = peopleCollection
+                    .orderBy('createdAt', 'asc')
+                    .onSnapshot((snapshot) => {
+                        const items = [];
+                        snapshot.forEach(doc => {
+                            items.push({ id: doc.id, ...doc.data() });
+                        });
+                        allData = items;
+                        refreshUI();
+                        setStatus('connected', `✅ เชื่อมต่อแล้ว (${allData.length} รายการ)`);
+                    }, (error) => {
+                        console.error('Listener error:', error);
+                        setStatus('disconnected', '❌ Realtime error');
+                        showToast('เกิดข้อผิดพลาดแบบ Real-time: ' + error.message, 'error');
+                    });
+            } catch (err) {
+                console.error('Setup listener error:', err);
+                setStatus('disconnected', '❌ ไม่สามารถเชื่อมต่อ');
+            }
+        }
+
+        // ---------- Save (Add / Update) ----------
+        async function saveItem() {
+            const name = nameInput.value.trim();
+            const address = addressInput.value.trim();
+            const idCard = idCardInput.value.trim();
+            const phone = phoneInput.value.trim();
+            const note = noteInput.value.trim();
+
+            if (!name) {
+                showToast('กรุณากรอกชื่อ', 'error');
+                nameInput.focus();
+                return;
+            }
+
+            // ถ้าไม่ได้เลือกรูปใหม่ และกำลังแก้ไข และมีรูปเดิมอยู่ ให้ใช้รูปเดิม
+            // แต่ currentImageBase64 จะมีค่าเฉพาะเมื่อเลือกรูปใหม่ หรือ clear แล้วเป็น null
+            // ดังนั้นเราจะเก็บรูปเดิมไว้ใน state ของฟอร์ม? ง่ายๆ: ถ้า currentImageBase64 เป็น null และกำลังแก้ไข
+            // เราจะไม่ส่งฟิลด์ image (หรือส่ง null) ซึ่งจะไม่เปลี่ยนแปลง
+            // แต่ถ้า currentImageBase64 เป็น null และเป็นการเพิ่มใหม่ ก็จะไม่มีรูป
+            // เราจะใช้ currentImageBase64 เป็นตัวกำหนด
+
+            const data = {
+                name,
+                address,
+                idCard,
+                phone,
+                note
+            };
+
+            // ถ้ามีรูป (currentImageBase64 ไม่ใช่ null) ให้เพิ่มฟิลด์ image
+            if (currentImageBase64) {
+                data.image = currentImageBase64;
+            } else {
+                // ถ้าเป็นการแก้ไขและต้องการลบรูป? เราไม่รองรับการลบรูปโดยเฉพาะ
+                // แต่ถ้าผู้ใช้กด clearImage แล้ว currentImageBase64 = null
+                // และเป็นการแก้ไข เราจะไม่ส่งฟิลด์ image (คงเดิม) หรือจะส่ง null? 
+                // ถ้าต้องการลบรูปต้องส่ง null ไปแทน แต่เราจะให้ลบรูปโดยการ clear แล้วบันทึกจะลบรูป
+                // แต่ถ้าไม่ส่งฟิลด์ image มันจะคงค่าเดิม (ไม่เปลี่ยนแปลง)
+                // ดังนั้นเราต้องเช็คว่าเป็นโหมดแก้ไขและ currentImageBase64 เป็น null (คือถูกลบ) 
+                // และรูปเดิมมีอยู่ ให้ลบออกโดยส่ง null
+                // เราสามารถตรวจสอบได้โดยถ้า editingId ไม่ใช่ null และรูปเดิมมีอยู่ แต่ currentImageBase64 เป็น null
+                // แสดงว่าต้องการลบรูป
+                const existingItem = allData.find(d => d.id === editingId);
+                if (editingId && existingItem && existingItem.image && currentImageBase64 === null) {
+                    // ต้องการลบรูป → ส่ง null
+                    data.image = null;
+                }
+                // ถ้าไม่ใช่กรณีนี้ ก็ไม่ต้องส่งฟิลด์ image (คงเดิม)
+            }
+
+            try {
+                if (editingId) {
+                    // อัปเดต
+                    await peopleCollection.doc(editingId).update({
+                        ...data,
+                        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+                    });
+                    showToast(`✅ อัปเดต "${name}" สำเร็จ`, 'success');
+                } else {
+                    // เพิ่มใหม่
+                    await peopleCollection.add({
+                        ...data,
+                        createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+                        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+                    });
+                    showToast(`✅ เพิ่ม "${name}" สำเร็จ`, 'success');
+                }
+                resetForm();
+            } catch (err) {
+                console.error('Save error:', err);
+                showToast('❌ บันทึกไม่สำเร็จ: ' + err.message, 'error');
+            }
+        }
+
+        // ---------- Delete single ----------
+        async function deleteItem(id) {
+            if (!confirm('คุณแน่ใจว่าต้องการลบรายการนี้?')) return;
+            try {
+                await peopleCollection.doc(id).delete();
+                showToast('🗑️ ลบสำเร็จ', 'success');
+                if (editingId === id) resetForm();
+            } catch (err) {
+                console.error('Delete error:', err);
+                showToast('❌ ลบไม่สำเร็จ: ' + err.message, 'error');
+            }
+        }
+
+        // ---------- Delete all ----------
+        async function deleteAll() {
+            if (allData.length === 0) {
+                showToast('ไม่มีข้อมูลให้ลบ', 'error');
+                return;
+            }
+            if (!confirm(`คุณแน่ใจว่าต้องการลบทั้งหมด ${allData.length} รายการ?`)) return;
+
+            try {
+                const batch = db.batch();
+                allData.forEach(item => {
+                    const ref = peopleCollection.doc(item.id);
+                    batch.delete(ref);
+                });
+                await batch.commit();
+                showToast(`🗑️ ลบทั้งหมด ${allData.length} รายการสำเร็จ`, 'success');
+                resetForm();
+            } catch (err) {
+                console.error('Delete all error:', err);
+                showToast('❌ ลบทั้งหมดไม่สำเร็จ: ' + err.message, 'error');
+            }
+        }
+
+        // ---------- Edit: load data to form ----------
+        function startEdit(id) {
+            const item = allData.find(d => d.id === id);
+            if (!item) {
+                showToast('ไม่พบข้อมูล', 'error');
+                return;
+            }
+            editingId = id;
+            nameInput.value = item.name || '';
+            addressInput.value = item.address || '';
+            idCardInput.value = item.idCard || '';
+            phoneInput.value = item.phone || '';
+            noteInput.value = item.note || '';
+
+            // รูปภาพ
+            if (item.image) {
+                currentImageBase64 = item.image; // เก็บ base64 เดิมไว้
+                imagePreview.innerHTML = `<img src="${item.image}" class="w-full h-full object-cover rounded-lg" alt="preview" />`;
+            } else {
+                currentImageBase64 = null;
+                imagePreview.innerHTML = '<span class="text-gray-400 text-xs text-center">ไม่มีรูป</span>';
+            }
+
+            formTitle.textContent = `✏️ แก้ไขข้อมูล (ID: ${id.slice(0,8)})`;
+            saveBtn.textContent = '🔄 อัปเดต';
+            cancelEditBtn.classList.remove('hidden');
+            document.querySelector('.bg-gray-50').scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+
+        // ---------- Reset form ----------
+        function resetForm() {
+            editingId = null;
+            nameInput.value = '';
+            addressInput.value = '';
+            idCardInput.value = '';
+            phoneInput.value = '';
+            noteInput.value = '';
+            clearImage(); // เคลียร์รูป
+            formTitle.textContent = '➕ เพิ่มข้อมูล';
+            saveBtn.textContent = '💾 บันทึก';
+            cancelEditBtn.classList.add('hidden');
+        }
+
+        // ---------- Test Connection ----------
+        async function testConnection() {
+            setStatus('loading', 'กำลังทดสอบเชื่อมต่อ...');
+            try {
+                const testRef = await peopleCollection.add({
+                    name: `test_${Date.now()}`,
+                    createdAt: firebase.firestore.FieldValue.serverTimestamp()
+                });
+                await testRef.delete();
+
+                setStatus('connected', '✅ พร้อมใช้งาน');
+                showToast('✅ เชื่อมต่อ Firestore สำเร็จ!', 'success');
+                setupListener();
+            } catch (err) {
+                console.error('Test error:', err);
+                setStatus('disconnected', '❌ เชื่อมต่อไม่สำเร็จ');
+                showToast('❌ เชื่อมต่อ Firestore ล้มเหลว: ' + err.message, 'error');
+                dataBody.innerHTML = `<tr><td colspan="8" class="empty-state" style="color:#ef4444;">⚠️ ${err.message}</td></tr>`;
+            }
+        }
+
+        // ---------- Event Listeners ----------
+        saveBtn.addEventListener('click', saveItem);
+        clearFormBtn.addEventListener('click', resetForm);
+        cancelEditBtn.addEventListener('click', resetForm);
+        deleteAllBtn.addEventListener('click', deleteAll);
+
+        searchInput.addEventListener('input', refreshUI);
+        clearSearchBtn.addEventListener('click', () => {
+            searchInput.value = '';
+            refreshUI();
+            searchInput.focus();
+        });
+
+        searchInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') refreshUI();
+        });
+
+        // Enter key ในฟอร์ม
+        document.querySelectorAll('#nameInput, #addressInput, #idCardInput, #phoneInput, #noteInput').forEach(input => {
+            input.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    saveItem();
+                }
+            });
+        });
+
+        // ---------- Start ----------
+        testConnection();
+
+        window.addEventListener('beforeunload', () => {
+            if (unsubscribe) unsubscribe();
+        });
+
+    })();
+</script>
+
+</body>
+</html>
